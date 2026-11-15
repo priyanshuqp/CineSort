@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CineGenre — Movie Genre Classifier</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+<style>
+:root{--bg:#0f1117;--panel:#171a23;--card:#1e222d;--border:#2a2f3d;--text:#e8eaf0;--muted:#8b92a5;--accent:#7c5cff;--accent2:#6a49f0}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,#221b4d55,transparent),var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 20px 40px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+h1{margin:0;font-size:30px}
+header span{color:var(--muted);font-size:14px}
+.grid{display:grid;grid-template-columns:5fr 4fr;gap:24px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:22px}
+label{display:block;color:var(--muted);font-size:12px;margin:0 0 6px}
+input,textarea{width:100%;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font:inherit;padding:11px 13px;outline:none;transition:border-color .15s}
+input:focus,textarea:focus{border-color:var(--accent)}
+textarea{height:250px;resize:vertical;font-size:14.5px;line-height:1.5}
+.field{margin-bottom:16px}
+.count{color:var(--muted);font-size:11px;margin-top:6px}
+.btns{display:flex;gap:10px;margin-top:16px}
+button{font:inherit;cursor:pointer;border-radius:12px;height:44px;padding:0 18px;border:1px solid var(--border);background:var(--card);color:var(--text);transition:.15s}
+button:hover{background:var(--border)}
+button.primary{flex:1;background:var(--accent);border-color:var(--accent);font-weight:700;font-size:15px}
+button.primary:hover{background:var(--accent2)}
+button:disabled{opacity:.6;cursor:wait}
+.eyebrow{font-size:11px;letter-spacing:.08em;font-weight:700;color:var(--muted)}
+.top{text-align:center;margin:8px 0 18px}
+.top .icon{font-size:56px;line-height:1.2}
+.top .name{font-size:30px;font-weight:700}
+.top .conf{color:var(--muted);font-size:13px}
+.row{margin-top:12px}
+.row .head{display:flex;justify-content:space-between;font-size:13.5px}
+.row .head .p{color:var(--muted);font-size:12.5px}
+.track{height:10px;background:var(--card);border-radius:6px;overflow:hidden;margin-top:5px}
+.fill{height:100%;width:0;border-radius:6px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.note{color:var(--muted);font-size:12.5px;margin-top:16px;min-height:18px}
+.err{color:#f87171}
+footer{color:var(--muted);font-size:12px;margin-top:22px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>🎬 CineGenre</h1><span>AI movie genre classifier</span></header>
+  <div class="grid">
+    <section class="panel">
+      <div class="field"><label for="title">Movie title (optional)</label>
+        <input id="title" placeholder="e.g. Midnight Express" maxlength="200"></div>
+      <div class="field"><label for="plot">Plot / description</label>
+        <textarea id="plot" placeholder="Paste or write the movie's plot here…"></textarea>
+        <div class="count" id="count">0 words • longer plots give better accuracy</div></div>
+      <div class="btns">
+        <button class="primary" id="go">✨ Analyze genre</button>
+        <button id="sample">Sample</button>
+        <button id="clear">Clear</button>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="eyebrow">PREDICTION</div>
+      <div class="top"><div class="icon" id="icon">🎞️</div>
+        <div class="name" id="name">Waiting for a plot…</div>
+        <div class="conf" id="conf">Paste a description and press Analyze</div></div>
+      <div id="bars"></div>
+      <div class="note" id="note"></div>
+    </section>
+  </div>
+  <footer>Linear SVM on TF-IDF features • {{ metrics.genres }} genres • top-1 accuracy {{ '%.1f'|format(metrics.accuracy*100) }}% • top-3 accuracy {{ '%.1f'|format(metrics.top3_accuracy*100) }}%</footer>
+</div>
+<script>
+const ICONS={"action":"💥","adult":"🔞","adventure":"🧭","animation":"🎨","biography":"📖","comedy":"😂","crime":"🕵️","documentary":"🎥","drama":"🎭","family":"👨‍👩‍👧","fantasy":"🧙","game-show":"🎮","history":"🏛️","horror":"👻","music":"🎵","musical":"🎤","mystery":"🔍","news":"📰","reality-tv":"📺","romance":"💞","sci-fi":"🚀","short":"⏱️","sport":"🏆","talk-show":"🎙️","thriller":"🔪","war":"🪖","western":"🤠"};
+const COLORS=["#7c5cff","#38bdf8","#34d399","#fbbf24","#f472b6"];
+const SAMPLES=[
+"A team of explorers travels through a wormhole near Saturn in search of a new habitable planet as Earth's crops fail. Time dilation, a black hole and an ageing daughter complicate the mission to save humanity.",
+"A family moves into an old farmhouse and soon discovers that something sinister lurks in the cellar. Strange noises, a possessed child and a priest who knows too much turn their nights into a terrifying fight for survival.",
+"A retired safecracker is dragged back for one last job against a casino owner who double-crossed him. As the police close in, nobody on the crew can be trusted.",
+"Two rival wedding planners are forced to organise the same ceremony, and between the disastrous cakes and mismatched guests they slowly fall in love."];
+let si=0;
+const $=id=>document.getElementById(id);
+const pretty=g=>g.replace("-"," ").replace(/\b\w/g,c=>c.toUpperCase());
+function counter(){const n=$("plot").value.trim().split(/\s+/).filter(Boolean).length;$("count").textContent=n+" words • longer plots give better accuracy"}
+$("plot").addEventListener("input",counter);
+$("sample").onclick=()=>{$("title").value="";$("plot").value=SAMPLES[si++%SAMPLES.length];counter();analyze()};
+$("clear").onclick=()=>{$("title").value="";$("plot").value="";counter();$("icon").textContent="🎞️";$("name").textContent="Waiting for a plot…";$("conf").textContent="Paste a description and press Analyze";$("bars").innerHTML="";$("note").textContent=""};
+$("go").onclick=analyze;
+async function analyze(){
+  const btn=$("go");btn.disabled=true;btn.textContent="Analyzing…";$("note").className="note";
+  try{
+    const r=await fetch("/api/predict",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:$("title").value,plot:$("plot").value})});
+    const d=await r.json();
+    if(!r.ok){$("name").textContent="Add more detail";$("conf").textContent=d.error||"Something went wrong";return}
+    const res=d.results,top=res[0];
+    $("icon").textContent=ICONS[top.genre]||"🎬";$("name").textContent=pretty(top.genre);$("conf").textContent=Math.round(top.prob*100)+"% confidence";
+    $("bars").innerHTML=res.map((x,i)=>`<div class="row"><div class="head"><span>${ICONS[x.genre]||"🎬"}  ${pretty(x.genre)}</span><span class="p">${(x.prob*100).toFixed(1)}%</span></div><div class="track"><div class="fill" style="background:${COLORS[i]}" data-w="${Math.min(100,x.prob*100)}"></div></div></div>`).join("");
+    requestAnimationFrame(()=>document.querySelectorAll(".fill").forEach(f=>f.style.width=f.dataset.w+"%"));
+    $("note").textContent=top.prob<0.45?`Mixed signals — this plot also fits ${res[1].genre.replace("-"," ")}. Many films blend genres.`:"";
+  }catch(e){$("note").className="note err";$("note").textContent="Could not reach the server. If the app was idle, wait ~30 seconds and try again."}
+  finally{btn.disabled=false;btn.textContent="✨ Analyze genre"}
+}
+</script>
+</body>
+</html>
